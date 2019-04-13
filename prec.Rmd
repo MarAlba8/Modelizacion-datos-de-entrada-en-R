@@ -1,0 +1,334 @@
+---
+title: 'Tarea: Modelización de datos de entrada'
+authors: 
+date: "25 de enero de 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+```
+
+## Modelización de datos de Precipitación
+
+La siguiente práctica consiste en determinar la distribución de la cantidad de precipitación 
+diaria en una localidad geográfica. los datos de este ejercicio corresponden a la localidad de Gavidia,
+en el páramo merideño durante los años 2000 a 2004 para el mes de octubre.
+
+```{r carga de datos}
+datos <-load("PreMensual.RData")
+```
+
+Seleccionamos
+los datos del mes de octubre:
+
+```{r}
+oct_d <- byMonth %>%
+    filter(M==10)
+head(oct_d)
+
+```
+
+Tomamos solo la variable de precipitación:
+
+```{r}
+octubre <- oct_d$P
+head(octubre)
+```
+
+## Independencia de los datos
+
+```{r }
+n= length(octubre)
+
+acf(octubre)
+
+ts.plot(octubre)
+
+lag.plot(octubre,lags=4,layout=c(2,2),labels=F,do.lines=F)
+```
+
+Se concluye que los datos son independientes
+
+## Formulación de hipótesis
+
+```{r }
+hist(octubre,prob=T)
+
+lines(density(octubre))
+ 
+summary(octubre)
+
+var(octubre)
+
+cvar = sd(octubre)/mean(octubre)
+cvar
+
+sd(octubre)
+```
+
+Gráfico de Caja:
+
+```{r }
+boxplot(octubre)
+```
+
+
+## Estimación de los parámetros de las tres distribuciones y Evaluación del Ajuste:
+
+ - Prueba Chi-Cuadrado
+ 
+Comparamos las gráficas de las funciones de probabilidad acumulada de las tres distribuciones con la función de probabilidad empírica de los datos
+
+```{r }
+library(MASS)
+n2mfrow=3 
+lnorm.par = fitdistr(octubre, "lognormal")
+lnorm.par
+curve(plnorm(x,meanlog=lnorm.par$estimate[1],sdlog=lnorm.par$estimate[2]),from=0, to=20,ylab="Probabilidad acumulada",col="red",lwd=2, main="lognormal")
+lines(ecdf(octubre))
+
+weib.par =fitdistr(octubre,"weibull")
+weib.par
+curve(pweibull(x,shape=weib.par$estimate[1],scale=weib.par$estimate[2]),from=0, to=20,ylab="Probabilidad acumulada",col="red",lwd=2, main="Weibull")
+lines(ecdf(octubre))
+
+gamma.par =fitdistr(octubre,"gamma")
+curve(pgamma(x,shape=gamma.par$estimate[1],rate=gamma.par$estimate[2]),from=0, to=20,ylab="Probabilidad acumulada",col="red",lwd=2, main="Gamma")
+lines(ecdf(octubre))
+```
+
+Las tres gráficas son muy similares. Ahora los hacemos con la gráfica cuantil-cuantil: 
+
+```{r }
+n2mfrow=3
+qqplot(qlnorm(ppoints(500), meanlog=lnorm.par$estimate[1],sdlog=lnorm.par$estimate[2]), octubre, main ="lognormal",xlab="cuantiles teóricos",ylab="cuantiles muestrales" )
+qqline(octubre, distribution = function(p) 
+qlnorm(p, meanlog=lnorm.par$estimate[1],sdlog=lnorm.par$estimate[2]),prob = c(0.25, 0.75), col = 2)
+
+qqplot(qweibull(ppoints(500), shape=weib.par$estimate[1],scale=weib.par$estimate[2]), octubre, main ="Weibull",xlab="cuantiles teóricos",ylab="cuantiles muestrales" )
+qqline(octubre, distribution = function(p) 
+  qweibull(p, shape=weib.par$estimate[1],scale=weib.par$estimate[2]),prob = c(0.25, 0.75), col = 2)
+
+par(mfrow=c(1,2))
+qqplot(qgamma(ppoints(500), shape=gamma.par$estimate[1],rate=gamma.par$estimate[2]), octubre, main ="Gamma",xlab="cuantiles teóricos",ylab="cuantiles muestrales" )
+qqline(octubre, distribution = function(p) 
+  qgamma(p, shape=gamma.par$estimate[1],rate=gamma.par$estimate[2]),prob = c(0.25, 0.75), col = 2)
+```
+
+
+
+Los gráficos de la lognormal y la weibull se ajustan mejor. Ahora realizamos la prueba de la Chi-Cuadrada para cada distribución. 
+
+Pruebas de gráficos de caja: 
+
+```{r }
+n2mfrow=c(1,1,1)
+
+s.lnorm=rlnorm(n,meanlog=lnorm.par$estimate[1],sdlog=lnorm.par$estimate[2])
+s.gamma=rgamma(n,shape=gamma.par$estimate[1],rate=gamma.par$estimate[2])
+s.weibull=rweibull(n,shape=weib.par$estimate[1],scale=weib.par$estimate[2])
+boxplot(octubre,s.lnorm,s.gamma,s.weibull,names=c("datos","lognormal","gamma","weibull"))
+```
+
+  *Prueba Chi-Cuadrada: 
+ 
+  
+
+```{r }
+hist(octubre,plot=F)
+
+limites = c(0,2,4,6,18)
+k = 4
+observadas = table(cut(octubre,limites))
+observadas
+```
+
+Calculamos las esperadas:
+
+
+```{r }
+p.lnorm = numeric(k)
+for (i in 1:k) {
+  p.lnorm[i] = plnorm(limites[i+1],meanlog=lnorm.par$estimate[1],sdlog=lnorm.par$estimate[2])-plnorm(limites[i],meanlog=lnorm.par$estimate[1],sdlog=lnorm.par$estimate[2])
+}
+espera.lnorm = n*p.lnorm
+X2lnorm = sum((observadas - espera.lnorm)^2/espera.lnorm)
+X2lnorm
+
+
+p.wei = numeric(k)
+for (i in 1:k) {
+  p.wei[i] = pweibull(limites[i+1],shape=weib.par$estimate[1],scale=weib.par$estimate[2])-pweibull(limites[i],shape=weib.par$estimate[1],scale=weib.par$estimate[2])
+}
+espera.wei = n*p.wei
+X2wei = sum((observadas - espera.wei)^2/espera.wei)
+X2wei
+
+
+p.gam = numeric(k)
+for (i in 1:k) {
+  p.gam[i] = pgamma(limites[i+1],shape=gamma.par$estimate[1],rate=gamma.par$estimate[2])-pgamma(limites[i],shape=gamma.par$estimate[1],rate=gamma.par$estimate[2])
+}
+espera.gam = n*p.gam
+X2gam = sum((observadas - espera.gam)^2/espera.gam)
+X2gam
+```
+Comparamos con el estadistico: 
+
+Calculamos el estadístico:
+  
+```{r }
+alfa = 0.1
+n.param = 2
+gl = length(observadas) - n.param - 1 
+X2crit =qchisq(1-alfa,gl) 
+X2crit
+```
+
+Como X2crit < X2gam. Rechamos H0 para la gamma. 
+
+
+Prueba Kolmogorov-Smirnof:
+
+Calculamos la función de probabilidad empírica de los datos
+
+```{r }
+Fn = (1:n)/n
+Fn
+```
+
+```{r }
+Fnm = c(0,Fn[1:(n-1)])
+Fnm 
+```
+
+Ordenamos los datos
+```{r }
+ord = sort(octubre)
+ord
+```
+
+Prueba K-S:
+
+Calculamos las funciones acumuladas
+
+```{r }
+Fhatg = pgamma(ord,shape=gamma.par$estimate[1],rate=gamma.par$estimate[2])
+
+Fhatl = plnorm(ord, meanlog= lnorm.par$estimate[1], sdlog=lnorm.par$estimate[2])
+
+
+Fhatw = pweibull(ord, shape = weib.par$estimate[1], scale=weib.par$estimate[2])
+```
+
+
+Calculamos de Dn+ y hallamos el máximo
+
+```{r }
+Dnposg = Fn - Fhatg
+Dnposg
+
+Dn.plusg = max(Dnposg)
+Dn.plusg
+
+Dnposl = Fn - Fhatl
+Dnposl
+
+Dn.plusl = max(Dnposl)
+Dn.plusl
+
+Dnposw = Fn - Fhatw
+Dnposw
+
+Dn.plusw = max(Dnposw)
+Dn.plusw
+```
+
+Calculamos Dn- y hallamos el máximo
+
+```{r }
+Dnnegg = Fhatg -Fnm
+Dnnegg
+```
+
+```{r }
+Dn.minusg =  max(Dnnegg)
+Dn.minusg
+```
+
+```{r }
+Dnnegl = Fhatl - Fnm
+Dnnegl
+```
+
+```{r }
+Dn.minusl = max(Dnnegl)
+Dn.minusl
+```
+
+```{r }
+Dnnegw = Fhatw - Fnm
+Dnnegw
+```
+
+```{r }
+Dn.minusw = max(Dnnegw)
+Dn.minusw
+```
+
+Estos son los datos que hemos obtenido
+```{r }
+marcog = cbind(X=octubre,Fn=Fn,Fhatg=round(Fhatg,4),Dpos = round(Dnposg,4),Dnmen = round(Dnnegg,4))
+
+head(marcog)
+
+```
+
+```{r }
+marcol = cbind(X=ord,Fn=Fn,Fhat=round(Fhatl,4),Dpos = round(Dnposl,4),Dnmenl = round(Dnnegl,4))
+
+head(marcol)
+```
+
+```{r }
+marcow = cbind(X=ord,Fn=Fn,Fhat=round(Fhatw,4),Dpos = round(Dnposw,4),Dnmen = round(Dnnegw,4))
+
+head(marcow)
+```
+
+Hallamos el maximo entre los Dnpos y Dnneg
+
+```{r }
+Dng = max(Dn.plusg,Dn.minusg)
+Dng
+```
+```{r }
+Dnl = max(Dn.plusl,Dn.minusl)
+Dnl
+```
+
+```{r }
+Dnw = max(Dn.plusw,Dn.minusw)
+Dnw
+```
+
+ Para un nivel de significancia del 1% el valor en la tabla es de (1.63/sqrt(85)) = 0,1767
+
+Usando ks.test de R para la Gamma
+```{r }
+ks.test(octubre,"pgamma",shape=gamma.par$estimate[1], rate=gamma.par$estimate[2])
+```
+
+Para la Lognormal 
+```{r }
+ks.test(octubre,"plnorm", meanlog= lnorm.par$estimate[1], sdlog=lnorm.par$estimate[2])
+```
+
+Y para la Weibull
+```{r }
+ks.test(octubre,"pweibull", shape= weib.par$estimate[1], scale=weib.par$estimate[2])
+```
+
+Ya que los resultados son muy similares tomamos el menor de los tres, concluyendo así, que los datos se ajustan a una distribución Weibull. 
